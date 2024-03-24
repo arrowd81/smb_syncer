@@ -145,7 +145,7 @@ class SmbSync:
                     with open(local_path + file_path, 'r') as local_file:
                         local_file_data = local_file.read()
                     if remote_file_data == local_file_data:
-                        main_logger.debug('new save entry: no syncing needed')
+                        main_logger.info('new save entry: no syncing needed')
                         self._saved_files.add_file(file_path,
                                                    local_change_time=os.path.getmtime(local_path + file_path),
                                                    remote_change_time=smbclient.path.getmtime(
@@ -154,7 +154,7 @@ class SmbSync:
                     else:
                         local_change_time = os.path.getmtime(local_path + '/' + file_path)
                         remote_change_time = smbclient.path.getmtime(remote_path + '/' + file_path, port=self._port)
-                        main_logger.debug(
+                        main_logger.info(
                             f'new save entry: with sync local time: {local_change_time}, remote time: {remote_change_time}')
                         if local_change_time > remote_change_time:
                             self._saved_files.add_file(file_path, local_change_time=local_change_time)
