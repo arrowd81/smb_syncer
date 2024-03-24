@@ -1,10 +1,24 @@
 import csv
+import logging
 import os.path
 import uuid
 
 import smbclient
 from smbprotocol import Dialects
 from smbprotocol.connection import Connection
+
+# logger
+main_logger = logging.getLogger(__name__)
+
+main_logger.setLevel(logging.DEBUG)
+
+handler = logging.FileHandler('syncer.log', "w")
+
+formatter = logging.Formatter("%(asctime)-20s : %(levelname)s : %(message)s")
+
+handler.setFormatter(formatter)
+
+main_logger.addHandler(handler)
 
 
 class Files:
@@ -32,27 +46,27 @@ class Changes:
 
     def new_local(self, file):
         self.new_local_files.append(file)
-        print(f'new local file: {file}')
+        main_logger.info(f'new local file: {file}')
 
     def new_remote(self, file):
         self.new_remote_files.append(file)
-        print(f'new remote file: {file}')
+        main_logger.info(f'new remote file: {file}')
 
     def updated_local(self, file):
         self.updated_local_files.append(file)
-        print(f'updated local file: {file}')
+        main_logger.info(f'updated local file: {file}')
 
     def updated_remote(self, file):
         self.updated_remote_files.append(file)
-        print(f'updated remote file: {file}')
+        main_logger.info(f'updated remote file: {file}')
 
     def deleted_local(self, file):
         self.deleted_local_files.append(file)
-        print(f'deleted local file: {file}')
+        main_logger.info(f'deleted local file: {file}')
 
     def deleted_remote(self, file):
         self.deleted_remote_files.append(file)
-        print(f'deleted remote file: {file}')
+        main_logger.info(f'deleted remote file: {file}')
 
 
 class SmbSync:
@@ -67,12 +81,12 @@ class SmbSync:
         self._changes = Changes()
 
     def sync_folder(self, share_name, remote_path, local_path):
-        self._connection.connect(Dialects.SMB_3_0_2)
+        self._connection.connect(Dialects.SMB_3_0_2, timeout=10)
         full_remote_path = '//' + self._server_name + '/' + share_name + '/' + remote_path
         self._load_remote_files(full_remote_path)
-        print('-' * 25 + 'finished remote' + '-' * 25)
+        main_logger.debug('-' * 25 + 'finished remote' + '-' * 25)
         self._load_local_files(local_path)
-        print('-' * 25 + 'finished local' + '-' * 25)
+        main_logger.debug('-' * 25 + 'finished local' + '-' * 25)
         self._load_saved_files()
         self._compare(full_remote_path, local_path)
         self._connection.disconnect()
@@ -88,20 +102,20 @@ class SmbSync:
     def _load_remote_files(self, remote_path, search_dir=''):
         for entry in smbclient.scandir(remote_path + '/' + search_dir, port=self._port):
             if entry.is_dir():
-                print(f'searching remote: {search_dir}/{entry.name}')
+                main_logger.debug(f'searching remote: {search_dir}/{entry.name}')
                 self._load_remote_files(remote_path, search_dir=search_dir + '/' + entry.name)
             else:
-                print(f'found remote file: {search_dir}/{entry.name}')
+                main_logger.debug(f'found remote file: {search_dir}/{entry.name}')
                 self._current_files.add_file(f'{search_dir}/{entry.name}',
                                              remote_change_time=entry.smb_info.change_time)
 
     def _load_local_files(self, local_path, search_dir=''):
         for entry in os.scandir(local_path + '/' + search_dir):
             if entry.is_dir():
-                print(f'searching local: {search_dir}/{entry.name}')
+                main_logger.debug(f'searching local: {search_dir}/{entry.name}')
                 self._load_local_files(local_path, search_dir=search_dir + '/' + entry.name)
             else:
-                print(f'found local file: {search_dir}/{entry.name}')
+                main_logger.debug(f'found local file: {search_dir}/{entry.name}')
                 self._current_files.add_file(f'{search_dir}/{entry.name}',
                                              local_change_time=entry)
 
@@ -131,7 +145,7 @@ class SmbSync:
                     with open(local_path + file_path, 'r') as local_file:
                         local_file_data = local_file.read()
                     if remote_file_data == local_file_data:
-                        print('new save entry: no syncing needed')
+                        main_logger.debug('new save entry: no syncing needed')
                         self._saved_files.add_file(file_path,
                                                    local_change_time=os.path.getmtime(local_path + file_path),
                                                    remote_change_time=smbclient.path.getmtime(
@@ -140,7 +154,7 @@ class SmbSync:
                     else:
                         local_change_time = os.path.getmtime(local_path + '/' + file_path)
                         remote_change_time = smbclient.path.getmtime(remote_path + '/' + file_path, port=self._port)
-                        print(
+                        main_logger.debug(
                             f'new save entry: with sync local time: {local_change_time}, remote time: {remote_change_time}')
                         if local_change_time > remote_change_time:
                             self._saved_files.add_file(file_path, local_change_time=local_change_time)
